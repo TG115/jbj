@@ -1,0 +1,12 @@
+.env
+
+data/raw/*
+data/processed/*
+
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+.idea/
+.vscode/
+
+.DS_Store
