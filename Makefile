@@ -1,9 +1,10 @@
 .PHONY: up down ps build \
         migrate seed \
+				migrate migrate-status migrate-baseline \
+				seed-reference \
         normalize-ksco8 normalize-keco2025 \
         import-ksco8 import-keco2025 \
-        etl-status \
-				migrate migrate-status migrate-baseline
+        etl-status
 
 up:
 	docker compose up -d
@@ -49,6 +50,18 @@ import-keco2025:
 		--source-code KECO2025 \
 		--source-file /data/raw/keco2025/keco2025_table.pdf
 
+inspect-kosis-demand:
+	docker compose exec python \
+		python -m jbj_etl.cli.inspect_kosis_table \
+		--org-id 118 \
+		--table-id DT_118N_DEN062 \
+		--output-dir /data/raw/kosis/DT_118N_DEN062/metadata
+
+inspect-kosis-demand-sample:
+	docker compose exec python \
+		python -m jbj_etl.cli.inspect_kosis_demand_sample \
+		--output /data/raw/kosis/DT_118N_DEN062/sample_202601_00_all_133.json
+
 etl-status:
 	docker compose exec mysql \
 		sh -c 'mysql --default-character-set=utf8mb4 \
@@ -83,3 +96,23 @@ migrate-baseline:
 		python -m jbj_etl.cli.migrate \
 		baseline /database/migrations \
 		--through 5
+
+seed-reference:
+	@set -e; \
+	for file in database/seeds/reference/*.sql; do \
+		[ -e "$$file" ] || continue; \
+		echo "[SEED] $$file"; \
+		docker compose exec -T mysql \
+			sh -c 'mysql --default-character-set=utf8mb4 \
+			-u"$$MYSQL_USER" \
+			-p"$$MYSQL_PASSWORD" \
+			"$$MYSQL_DATABASE"' \
+			< "$$file"; \
+	done
+
+KOSIS_DEMAND_PERIOD ?= 202601
+
+collect-kosis-demand:
+	docker compose exec python \
+		python -m jbj_etl.cli.collect_kosis_labor_demand \
+		--period $(KOSIS_DEMAND_PERIOD)

@@ -100,6 +100,8 @@ services:
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
 
+      KOSIS_API_KEY: ${KOSIS_API_KEY}
+
     depends_on:
       mysql:
         condition: service_healthy

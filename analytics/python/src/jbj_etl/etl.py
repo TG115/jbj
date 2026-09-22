@@ -181,3 +181,30 @@ def fail_etl_run(
                 etl_run_id,
             ),
         )
+
+def attach_source_file(
+    connection: Connection,
+    *,
+    etl_run_id: int,
+    source_file: Path,
+) -> None:
+
+    checksum = calculate_sha256(
+        source_file
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE etl_run
+            SET
+                source_file_name = %s,
+                source_checksum_sha256 = %s
+            WHERE etl_run_id = %s
+            """,
+            (
+                source_file.name,
+                checksum,
+                etl_run_id,
+            ),
+        )

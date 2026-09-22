@@ -21,3 +21,24 @@ def get_database_config() -> DatabaseConfig:
         password=os.environ["DB_PASSWORD"],
         database=os.environ["DB_DATABASE"],
     )
+
+
+@dataclass(frozen=True)
+class KosisConfig:
+    api_key: str
+
+
+def get_kosis_config() -> KosisConfig:
+    api_key = os.environ.get(
+        "KOSIS_API_KEY",
+        "",
+    ).strip()
+
+    if not api_key:
+        raise RuntimeError(
+            "KOSIS_API_KEY 환경변수가 없습니다."
+        )
+
+    return KosisConfig(
+        api_key=api_key,
+    )
