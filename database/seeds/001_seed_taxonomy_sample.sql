@@ -80,6 +80,25 @@ INSERT INTO occupation_taxonomy (
 SET @keco2025_id = LAST_INSERT_ID();
 
 
+-- 대분류
+INSERT INTO occupation_taxonomy_node (
+    occupation_taxonomy_id,
+    code,
+    name_ko,
+    level,
+    parent_occupation_taxonomy_node_id
+) VALUES (
+    @keco2025_id,
+    '1',
+    '연구직 및 공학 기술직',
+    1,
+    NULL
+);
+
+SET @keco2025_level1_id = LAST_INSERT_ID();
+
+
+-- 중분류
 INSERT INTO occupation_taxonomy_node (
     occupation_taxonomy_id,
     code,
@@ -90,13 +109,14 @@ INSERT INTO occupation_taxonomy_node (
     @keco2025_id,
     '13',
     '정보통신 연구개발직 및 공학 기술직',
-    1,
-    NULL
+    2,
+    @keco2025_level1_id
 );
 
-SET @keco2025_level1_id = LAST_INSERT_ID();
+SET @keco2025_level2_id = LAST_INSERT_ID();
 
 
+-- 소분류
 INSERT INTO occupation_taxonomy_node (
     occupation_taxonomy_id,
     code,
@@ -107,6 +127,6 @@ INSERT INTO occupation_taxonomy_node (
     @keco2025_id,
     '133',
     '소프트웨어 개발자',
-    2,
-    @keco2025_level1_id
+    3,
+    @keco2025_level2_id
 );
