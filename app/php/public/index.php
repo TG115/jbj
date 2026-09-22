@@ -1,64 +1,20 @@
 <?php
 
-header('Content-Type: text/html; charset=utf-8');
+use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
 
-$dbHost = getenv('DB_HOST');
-$dbPort = getenv('DB_PORT');
-$dbName = getenv('DB_DATABASE');
-$dbUser = getenv('DB_USERNAME');
-$dbPass = getenv('DB_PASSWORD');
+define('LARAVEL_START', microtime(true));
 
-$dbStatus = 'disconnected';
-$dbError = null;
-
-try {
-    $pdo = new PDO(
-        "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4",
-        $dbUser,
-        $dbPass,
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        ]
-    );
-
-    $pdo->query('SELECT 1');
-
-    $dbStatus = 'connected';
-} catch (Throwable $e) {
-    $dbError = $e->getMessage();
+// Determine if the application is in maintenance mode...
+if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
+    require $maintenance;
 }
 
-?>
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>JBJ</title>
-</head>
+// Register the Composer autoloader...
+require __DIR__.'/../vendor/autoload.php';
 
-<body>
+// Bootstrap Laravel and handle the request...
+/** @var Application $app */
+$app = require_once __DIR__.'/../bootstrap/app.php';
 
-<h1>JBJ API is running</h1>
-
-<p>
-    PHP:
-    <?= htmlspecialchars(PHP_VERSION) ?>
-</p>
-
-<p>
-    Database:
-    <strong>
-        <?= htmlspecialchars($dbStatus) ?>
-    </strong>
-</p>
-
-<?php if ($dbError): ?>
-
-<pre>
-<?= htmlspecialchars($dbError) ?>
-</pre>
-
-<?php endif; ?>
-
-</body>
-</html>
+$app->handleRequest(Request::capture());

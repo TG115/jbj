@@ -20,6 +20,9 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+      args:
+        UID: ${LOCAL_UID:-1000}
+        GID: ${LOCAL_GID:-1000}
 
     working_dir: /var/www/html
 
@@ -27,11 +30,19 @@ services:
       - ./app/php:/var/www/html
 
     environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+
+      DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
       DB_DATABASE: ${MYSQL_DATABASE}
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
+
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
 
     depends_on:
       mysql:

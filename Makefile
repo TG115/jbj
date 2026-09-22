@@ -18,6 +18,24 @@ ps:
 build:
 	docker compose build
 
+php-shell:
+	docker compose exec \
+		--user www-data \
+		-e HOME=/tmp \
+		php sh
+
+artisan:
+	docker compose exec \
+		--user www-data \
+		-e HOME=/tmp \
+		php php artisan $(ARGS)
+
+composer-install:
+	docker compose exec \
+		--user www-data \
+		-e HOME=/tmp \
+		php composer install
+
 normalize-ksco8:
 	docker compose exec python \
 		python -m jbj_etl.cli.normalize_ksco8 \
