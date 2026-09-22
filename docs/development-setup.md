@@ -1,27 +1,36 @@
 # JBJ 개발환경 및 데이터 파이프라인 재현 가이드
 
 > 프로젝트: **JBJ (Job by Job / 직바직)**  
-> 목적: 새 PC나 다른 개발환경에서도 현재까지 구축한 Docker, DB, Migration, ETL, 직업분류 데이터를 동일하게 재현하기 위한 문서
+> 목적: 새 PC나 다른 개발환경에서도 현재까지 구축한 Docker, DB, Migration, ETL, Laravel API, 직업분류 및 노동수요 데이터를 동일하게 재현하기 위한 문서
+
+---
 
 ## 1. 현재 스택
 
-JBJ는 Windows + WSL2 환경에서 개발하며, JBJ용 Docker는 **WSL 내부 Docker Engine**을 사용한다.
+JBJ는 Windows + WSL2 환경에서 개발하며, JBJ용 Docker는 **WSL Ubuntu 내부 Docker Engine**을 사용한다.
 
 - WSL2 + Ubuntu LTS
 - Docker Engine + Docker Compose Plugin
 - Nginx
 - PHP 8.5 FPM
+- Composer 2
+- Laravel 13
 - MySQL 8.4
 - Python 3.12
 
-기본 포트:
 
-| 서비스 | Host | Container |
-|---|---:|---:|
-| Nginx | 8081 | 80 |
-| MySQL | 3308 | 3306 |
+| 서비스     | Host | Container |
+| ------- | ---- | --------- |
+| Nginx   | 8081 | 80        |
+| MySQL   | 3308 | 3306      |
+| PHP-FPM | -    | 9000      |
 
-컨테이너끼리 통신할 때는 `mysql:3306`, PC에서 MySQL에 접근할 때는 `localhost:3308`을 사용한다.
+
+컨테이너 간 MySQL 접속은 `mysql:3306`, PC에서 직접 접속할 때는 `localhost:3308`을 사용한다.
+
+---
+
+
 
 ## 2. Docker Context
 
@@ -29,15 +38,25 @@ JBJ는 Windows + WSL2 환경에서 개발하며, JBJ용 Docker는 **WSL 내부 D
 docker context show
 ```
 
-JBJ에서는 다음이 정상이다.
+정상:
 
 ```text
 default
 ```
 
-`desktop-linux`가 활성화되어 있으면 Docker Desktop context이므로 JBJ에서는 사용하지 않는다.
+`desktop-linux`는 Docker Desktop context이므로 JBJ에서는 사용하지 않는다.
 
-## 3. 현재 프로젝트 구조
+```bash
+systemctl status docker
+```
+
+로 WSL 내부 Docker daemon 상태를 확인한다.
+
+---
+
+
+
+## 3. 프로젝트 구조
 
 ```text
 ~/jbj
@@ -46,84 +65,198 @@ default
 ├─ compose.yml
 ├─ .env
 ├─ .env.example
-├─ .gitignore
 ├─ docs/
 │  ├─ database-convention.md
 │  └─ development-setup.md
-├─ app/php/public/index.php
+├─ app/php/
+│  ├─ app/
+│  │  ├─ Data/
+│  │  │  └─ LaborDemandSnapshot.php
+│  │  ├─ Http/
+│  │  │  ├─ Controllers/Api/
+│  │  │  │  └─ OccupationLaborDemandController.php
+│  │  │  └─ Resources/
+│  │  │     └─ OccupationLaborDemandResource.php
+│  │  └─ Services/
+│  │     └─ OccupationLaborDemandService.php
+│  ├─ bootstrap/
+│  ├─ config/
+│  ├─ public/index.php
+│  ├─ resources/
+│  ├─ routes/
+│  │  ├─ api.php
+│  │  ├─ console.php
+│  │  └─ web.php
+│  ├─ storage/
+│  ├─ tests/
+│  ├─ artisan
+│  ├─ composer.json
+│  └─ composer.lock
 ├─ analytics/python/
 │  ├─ Dockerfile
 │  ├─ requirements.txt
 │  └─ src/jbj_etl/
-│     ├─ __init__.py
 │     ├─ config.py
 │     ├─ db.py
 │     ├─ etl.py
 │     ├─ migration.py
+│     ├─ providers/kosis/client.py
 │     ├─ taxonomy/
-│     │  ├─ __init__.py
 │     │  ├─ types.py
 │     │  ├─ validator.py
 │     │  ├─ importer.py
 │     │  └─ normalizers/
-│     │     ├─ __init__.py
 │     │     ├─ ksco8.py
 │     │     └─ keco2025.py
+│     ├─ labor_demand/
+│     │  ├─ types.py
+│     │  ├─ normalizer.py
+│     │  └─ importer.py
 │     └─ cli/
-│        ├─ __init__.py
 │        ├─ migrate.py
 │        ├─ import_taxonomy.py
 │        ├─ normalize_ksco8.py
 │        ├─ normalize_keco2025.py
-│        ├─ inspect_hwpx.py
-│        └─ inspect_pdf.py
+│        ├─ inspect_kosis_table.py
+│        ├─ inspect_kosis_demand_sample.py
+│        └─ collect_kosis_labor_demand.py
 ├─ database/
 │  ├─ migrations/
 │  │  ├─ 001_create_occupation_taxonomy.sql
 │  │  ├─ 002_create_canonical_occupation.sql
 │  │  ├─ 003_create_canonical_occupation_mapping.sql
 │  │  ├─ 004_create_data_source.sql
-│  │  └─ 005_create_etl_run.sql
-│  └─ seeds/
+│  │  ├─ 005_create_etl_run.sql
+│  │  └─ 006_create_fact_labor_demand.sql
+│  └─ seeds/reference/
+│     └─ 001_upsert_data_source.sql
 └─ data/
    ├─ raw/
    │  ├─ ksco8/ksco8_items.hwpx
-   │  └─ keco2025/keco2025_table.pdf
+   │  ├─ keco2025/keco2025_table.pdf
+   │  └─ kosis/DT_118N_DEN062/
+   │     ├─ metadata/
+   │     └─ data/
    └─ processed/taxonomies/
       ├─ ksco8.csv
       └─ keco2025.csv
 ```
 
-`__init__.py`는 비어 있어도 정상이다.
 
-## 4. `.env`
 
-예시:
+### Laravel 기본과 JBJ 커스텀
+
+
+| 경로                             | 성격            | 역할                      |
+| ------------------------------ | ------------- | ----------------------- |
+| `app/php/app/Http/Controllers` | Laravel 기본    | HTTP 요청 처리              |
+| `app/php/app/Http/Resources`   | Laravel 기능/관례 | API JSON 변환             |
+| `app/php/app/Data`             | JBJ 커스텀       | DTO                     |
+| `app/php/app/Services`         | JBJ 커스텀       | 비즈니스 로직                 |
+| `app/php/resources`            | Laravel 기본    | Blade/JS/CSS 등 화면 리소스   |
+| `/database/migrations`         | JBJ 커스텀       | PHP/Python 공용 DB schema |
+| `/analytics/python`            | JBJ 커스텀       | ETL/분석                  |
+| `/data`                        | JBJ 커스텀       | raw/processed 데이터       |
+
+
+Laravel 기본 migration은 사용하지 않는다. JBJ DB schema의 Single Source of Truth는 프로젝트 루트의 `/database/migrations`이다.
+
+---
+
+
+
+## 4. 환경변수
+
+Root:
+
+```bash
+cp .env.example .env
+```
+
+예:
 
 ```env
 MYSQL_ROOT_PASSWORD=jbj_root_password
 MYSQL_DATABASE=jbj
 MYSQL_USER=jbj
 MYSQL_PASSWORD=jbj_password
+
+KOSIS_API_KEY=
+
+LOCAL_UID=1000
+LOCAL_GID=1000
 ```
 
-`.env`는 Git에 커밋하지 않는다. 새 환경에서는:
+UID/GID 확인:
 
 ```bash
-cp .env.example .env
+id -u
+id -g
 ```
 
-후 값을 입력한다.
+Laravel:
 
-## 5. Python Docker 설정
+```bash
+cp app/php/.env.example app/php/.env
+```
 
-Python Dockerfile에는 다음 설정이 필요하다.
+`/.env`, `app/php/.env`는 Git에 커밋하지 않는다.
+
+---
+
+
+
+## 5. PHP / Laravel 파일 권한
+
+Artisan/Composer가 bind mount에 `root:root` 파일을 생성하지 않도록 PHP 컨테이너의 `www-data` UID/GID를 WSL 사용자와 맞춘다.
+
+Dockerfile 예:
+
+```dockerfile
+ARG UID=1000
+ARG GID=1000
+
+RUN groupmod -o -g ${GID} www-data \
+    && usermod -o -u ${UID} -g ${GID} www-data
+```
+
+Compose build args:
+
+```yaml
+build:
+  args:
+    UID: ${LOCAL_UID:-1000}
+    GID: ${LOCAL_GID:-1000}
+```
+
+파일 생성 작업은 가능하면 `www-data`로 실행한다.
+
+```bash
+docker compose exec \
+  --user www-data \
+  -e HOME=/tmp \
+  php php artisan route:list
+```
+
+기존 ownership 정리는 필요할 때 한 번만:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" app/php
+```
+
+---
+
+
+
+## 6. Python 설정
+
+Dockerfile:
 
 ```dockerfile
 ENV PYTHONPATH=/app/src
 ```
 
-`compose.yml`의 Python 서비스에는 다음 mount가 필요하다.
+Compose volume:
 
 ```yaml
 volumes:
@@ -132,16 +265,19 @@ volumes:
   - ./database:/database:ro
 ```
 
-주요 Python package:
+주요 package:
 
 ```text
 PyMySQL
 pypdf
+requests
 ```
 
-## 6. MySQL Timezone
+---
 
-JBJ는 한국 서비스 기준으로 MySQL session timezone을 `+09:00`으로 맞춘다.
+
+
+## 7. MySQL Timezone
 
 ```yaml
 environment:
@@ -151,27 +287,18 @@ command:
   - --default-time-zone=+09:00
 ```
 
-확인:
+---
+
+
+
+## 8. 새 환경 최초 실행
 
 ```bash
-docker compose exec mysql \
-  sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
-  -e "
-SELECT
-    @@system_time_zone,
-    @@global.time_zone,
-    @@session.time_zone,
-    NOW(),
-    UTC_TIMESTAMP();
-"'
-```
-
-## 7. 최초 실행
-
-```bash
-git clone <repository>
+git clone <repository-url> jbj
 cd jbj
+
 cp .env.example .env
+cp app/php/.env.example app/php/.env
 ```
 
 `.env` 작성 후:
@@ -182,23 +309,72 @@ make up
 make ps
 ```
 
-브라우저:
+Laravel dependency:
 
-```text
-http://localhost:8081
+```bash
+docker compose exec \
+  --user www-data \
+  -e HOME=/tmp \
+  php composer install
 ```
 
-정상 확인 예:
+`APP_KEY`가 비어 있다면:
 
-```text
-JBJ API is running
-PHP: 8.5.x
-Database: connected
+```bash
+docker compose exec \
+  --user www-data \
+  -e HOME=/tmp \
+  php php artisan key:generate
 ```
 
-## 8. Makefile
+DB:
 
-반복되는 긴 Docker 명령은 Makefile로 감싼다.
+```bash
+make migrate
+make seed-reference
+```
+
+baseline은 migration runner 도입 전에
+SQL을 수동 적용한 기존 DB를 편입할 때만 사용한다.
+
+현재 DB가 수동으로 적용된 마지막 migration을 확인한 후:
+
+`make migrate-baseline THROUGH=<마지막 버전>`
+
+새 DB 또는 이미 schema_migration이 존재하는 DB에서는
+baseline을 사용하지 않는다.
+
+---
+
+
+
+## 9. 기본 동작 확인
+
+```bash
+docker compose exec php php artisan route:list
+```
+
+```bash
+curl http://localhost:8081/api/health
+```
+
+정상:
+
+```json
+{
+  "service": "jbj-api",
+  "status": "ok",
+  "database": "connected"
+}
+```
+
+Laravel 기본 health는 `/up`, JBJ DB health는 `/api/health`다.
+
+---
+
+
+
+## 10. Makefile 주요 명령
 
 ```bash
 make up
@@ -208,6 +384,7 @@ make build
 
 make migrate
 make migrate-status
+make seed-reference
 
 make normalize-ksco8
 make import-ksco8
@@ -215,183 +392,119 @@ make import-ksco8
 make normalize-keco2025
 make import-keco2025
 
+make inspect-kosis-demand
+make inspect-kosis-demand-sample
+make collect-kosis-demand
+
 make etl-status
 ```
 
-Makefile은 Docker를 대체하는 것이 아니라 반복 명령에 짧은 이름을 붙인 것이다.
+---
 
-## 9. Migration 규칙
 
-Migration 파일 규칙:
+
+## 11. Migration 규칙
 
 ```text
 NNN_<action>_<target>.sql
 ```
 
-예:
+현재:
 
 ```text
 001_create_occupation_taxonomy.sql
+002_create_canonical_occupation.sql
+003_create_canonical_occupation_mapping.sql
 004_create_data_source.sql
 005_create_etl_run.sql
 006_create_fact_labor_demand.sql
 ```
 
-이미 적용된 migration은 수정하지 않는다. 구조 변경이 필요하면 새 migration을 추가한다.
+이미 적용된 migration은 수정하지 않는다. 변경은 새 migration으로 추가한다.
 
-예:
-
-```text
-004_create_data_source.sql 수정 X
-006_alter_data_source.sql 추가 O
-```
-
-### schema_migration
-
-Migration runner는 `schema_migration` 테이블로 적용 여부와 checksum을 관리한다.
+`schema_migration`은 적용 여부와 SHA-256 checksum을 관리한다.
 
 ```bash
 make migrate-status
 ```
 
-### 새 DB
+초기 개발 DB에서만 `001~005`를 baseline 처리했고, `006`부터는 runner로 적용한다.
 
-새 DB에서는 다음만 실행한다.
+---
+
+
+
+## 12. Seed 규칙
+
+- Migration: DB 구조
+- Reference Seed: 시스템 기준 데이터
+- Development Seed: 로컬 테스트 데이터
+
+현재 reference source:
+
+```text
+KSCO8
+KECO2025
+KOSIS_LABOR_DEMAND
+```
 
 ```bash
-make migrate
+make seed-reference
 ```
 
-`001`부터 미적용 migration을 자동 실행한다.
+Reference Seed는 재실행 가능한 UPSERT 형태로 작성한다.
 
-### 기존 개발 DB의 baseline
+---
 
-초기 개발 DB에서는 migration runner 도입 전에 `001~005`를 수동 적용했기 때문에 한 번만:
 
-```bash
-make migrate-baseline
-```
 
-을 실행했다.
+## 13. 주요 DB 테이블
 
-이후:
+- `occupation_taxonomy`: 공식 분류체계
+- `occupation_taxonomy_node`: 분류 코드와 계층
+- `canonical_occupation`: JBJ 기준 직업
+- `canonical_occupation_mapping`: JBJ 직업과 외부 분류의 관계
+- `data_source`: 데이터셋 등록부
+- `etl_run`: ETL 실행/원본/checksum/건수/오류 이력
+- `fact_labor_demand`: KOSIS 노동수요 공식 원자료
 
-```bash
-make migrate
-```
-
-결과 `0 applied`까지 확인 완료.
-
-**새 PC의 새 DB에서는 `make migrate-baseline`을 실행하지 않는다.**
-
-## 10. Seed 규칙
-
-Migration과 Seed는 역할이 다르다.
-
-- Migration: DB 구조 변경, 한 번만 실행
-- Reference Seed: `data_source` 같은 시스템 기준 데이터
-- Development Seed: 로컬 테스트용 데이터
-
-Reference Seed는 재실행 가능하도록 `INSERT ... ON DUPLICATE KEY UPDATE` 형태를 권장한다.
-
-향후 권장 구조:
+`fact_labor_demand` grain:
 
 ```text
-database/seeds/
-├─ reference/
-└─ development/
+period
+× region
+× establishment size
+× KECO occupation
 ```
 
-## 11. 주요 DB 테이블
-
-### occupation_taxonomy
-공식 직업분류 체계 자체.
+공식 지표:
 
 ```text
-KSCO 8
-KECO 2025
+current_workers_count
+openings_count
+hires_count
+unfilled_count
+shortage_count
+planned_hires_count
+shortage_rate
 ```
 
-### occupation_taxonomy_node
-각 분류체계 내부의 실제 코드.
+JBJ 파생지표는 공식 Fact와 구분한다.
 
-```text
-KSCO8 222
-컴퓨터 시스템 및 소프트웨어 전문가
+---
 
-KECO2025 133
-소프트웨어 개발자
-```
 
-### canonical_occupation
-JBJ가 사용자에게 보여주는 기준 직업.
 
-### canonical_occupation_mapping
-JBJ 기준 직업과 공식 분류체계를 연결한다.
+## 14. KSCO8 / KECO2025
 
-### data_source
-데이터셋 등록부.
-
-### etl_run
-ETL 실행 이력.
-
-기록 예:
-
-```text
-source
-job
-status
-source file
-SHA-256 checksum
-parameters
-processed count
-started_at
-finished_at
-error message
-```
-
-## 12. Python ETL 구조
-
-```text
-공식 원본
-   ↓
-Source-specific Normalizer
-   ↓
-TaxonomyRow
-   ↓
-Validator
-   ↓
-Generic Importer
-   ↓
-MySQL
-```
-
-TaxonomyRow:
-
-```python
-{
-    "code": "133",
-    "name_ko": "소프트웨어 개발자",
-    "level": 3,
-    "parent_code": "13",
-}
-```
-
-## 13. KSCO8
-
-원본:
-
-```text
-data/raw/ksco8/ksco8_items.hwpx
-```
-
-정규화:
+KSCO8:
 
 ```bash
 make normalize-ksco8
+make import-ksco8
 ```
 
-검증된 결과:
+검증:
 
 ```text
 Level 1: 10
@@ -402,36 +515,14 @@ Level 5: 1270
 Total: 1999
 ```
 
-DB Import:
-
-```bash
-make import-ksco8
-```
-
-기대:
-
-```text
-Validated: 1999 nodes
-Nodes processed: 1999
-```
-
-## 14. KECO2025
-
-원본:
-
-```text
-data/raw/keco2025/keco2025_table.pdf
-```
-
-PDF 텍스트 특성상 코드 중간 공백이나 한 줄에 여러 코드가 붙는 경우를 normalizer에서 보정한다.
-
-정규화:
+KECO2025:
 
 ```bash
 make normalize-keco2025
+make import-keco2025
 ```
 
-검증된 결과:
+검증:
 
 ```text
 Level 1: 10
@@ -441,180 +532,317 @@ Level 4: 495
 Total: 680
 ```
 
-DB Import:
+총 taxonomy node: `2679`.
 
-```bash
-make import-keco2025
-```
+---
 
-기대:
 
-```text
-Validated: 680 nodes
-Nodes processed: 680
-```
 
-현재 taxonomy node 총합:
+## 15. KOSIS 노동수요
 
 ```text
-KSCO8     1999
-KECO2025   680
-----------------
-Total     2679
+ORG_ID = 118
+TBL_ID = DT_118N_DEN062
+직종별·규모별(2026년 이후)
 ```
 
-## 15. ETL 실행 이력
-
-조회:
-
-```bash
-make etl-status
-```
-
-현재 기대 상태:
+분류:
 
 ```text
-KSCO8     import_taxonomy   SUCCESS   1999
-KECO2025  import_taxonomy   SUCCESS    680
+시도
+규모
+KECO 직종
 ```
 
-원본 파일의 SHA-256 checksum을 기록하므로 같은 파일명이더라도 내용이 변경되었는지 확인할 수 있다.
+지표:
 
-## 16. 새 PC에서 전체 복구 순서
+```text
+현원
+구인인원
+채용인원
+미충원인원
+부족인원
+채용계획인원
+부족률
+```
+
+Metadata:
 
 ```bash
-git clone <repository>
+make inspect-kosis-demand
+```
+
+Sample:
+
+```bash
+make inspect-kosis-demand-sample
+```
+
+수집:
+
+```bash
+make collect-kosis-demand
+```
+
+다른 반기:
+
+```bash
+make collect-kosis-demand KOSIS_DEMAND_PERIOD=202602
+```
+
+검증된 샘플:
+
+```text
+2026 상반기 / 전국 / 전규모 / KECO 133 소프트웨어 개발자
+
+현원        341646
+구인         16408
+채용         13414
+미충원        2994
+부족         11293
+채용계획     11108
+부족률          3.2
+```
+
+---
+
+
+
+## 16. Laravel API 구조
+
+```text
+routes/api.php
+   ↓
+OccupationLaborDemandController
+   ↓
+OccupationLaborDemandService
+   ↓
+Query Builder
+   ↓
+MySQL
+   ↓
+LaborDemandSnapshot (DTO)
+   ↓
+OccupationLaborDemandResource
+   ↓
+JSON
+```
+
+역할:
+
+```text
+Route      = URL 연결
+Controller = HTTP 요청/응답
+Service    = JBJ 비즈니스 규칙/조회
+DTO        = 타입이 명확한 내부 데이터
+Resource   = 외부 JSON 구조
+```
+
+
+
+### 현재 API
+
+```text
+GET /api/health
+GET /api/occupations/{occupationCode}/labor-demand
+```
+
+예:
+
+```bash
+curl http://localhost:8081/api/occupations/133/labor-demand
+```
+
+---
+
+
+
+## 17. PHP 8 / Laravel 현재 사용 개념
+
+PHP:
+
+```text
+strict_types
+typed properties
+nullable type
+union type
+constructor property promotion
+readonly
+named arguments
+return type
+```
+
+Laravel:
+
+```text
+Routing
+Controller
+Dependency Injection / Service Container
+Query Builder
+JsonResource
+Artisan
+```
+
+자동 호출 예:
+
+```text
+new 객체          → __construct()       PHP
+Route match       → Controller::show() Laravel
+JsonResource 응답 → toArray()          Laravel
+Controller 의존성  → 자동 생성/주입      Laravel
+```
+
+`$this->resource`에는 `JsonResource` 생성자로 전달한 `LaborDemandSnapshot` DTO가 들어간다.
+
+---
+
+
+
+## 18. 새 PC 전체 복구 순서
+
+```bash
+git clone <repository-url> jbj
 cd jbj
-
 cp .env.example .env
-# .env 작성
-
+cp app/php/.env.example app/php/.env
 make build
 make up
+```
+
+Composer / APP_KEY:
+
+```bash
+docker compose exec --user www-data -e HOME=/tmp php composer install
+docker compose exec --user www-data -e HOME=/tmp php php artisan key:generate
+```
+
+DB:
+
+```bash
 make migrate
+make seed-reference
 ```
 
-Reference Seed가 필요하면 적용한다.
-
-공식 raw 파일은 Git에 포함하지 않는 것을 원칙으로 하므로 다음 위치에 준비한다.
-
-```text
-data/raw/ksco8/ksco8_items.hwpx
-data/raw/keco2025/keco2025_table.pdf
-```
-
-그 다음:
+Taxonomy raw 파일 준비 후:
 
 ```bash
 make normalize-ksco8
 make import-ksco8
-
 make normalize-keco2025
 make import-keco2025
-
-make migrate-status
-make etl-status
 ```
 
-## 17. Git 관리 원칙
+KOSIS:
 
-Git에 포함:
+```bash
+make inspect-kosis-demand
+make collect-kosis-demand
+```
+
+검증:
+
+```bash
+make migrate-status
+make etl-status
+curl http://localhost:8081/api/health
+curl http://localhost:8081/api/occupations/133/labor-demand
+```
+
+---
+
+
+
+## 19. Git 관리 원칙
+
+Git 포함:
 
 ```text
 compose.yml
 Dockerfile
 requirements.txt
 Makefile
-Python/PHP source
+PHP/Python source
+composer.json
+composer.lock
 migration
-seed
+reference seed
 docs
 .env.example
+app/php/.env.example
 ```
 
-Git에서 제외:
+Git 제외:
 
 ```text
 .env
+app/php/.env
+app/php/vendor/
+app/php/node_modules/
 data/raw/
 MySQL Docker volume
-개인 로컬 설정
 ```
 
-## 18. 현재까지 완료
+---
+
+
+
+## 20. 현재까지 완료
 
 ```text
-[완료] WSL2 + Docker Engine
-[완료] Docker Compose
-[완료] Nginx
-[완료] PHP 8.5
-[완료] MySQL 8.4
-[완료] Python 3.12
-[완료] PHP → MySQL
-[완료] Python → MySQL
-[완료] Asia/Seoul timezone
-[완료] DB naming convention
-[완료] taxonomy schema
-[완료] canonical occupation schema
-[완료] KSCO8 HWPX normalizer
-[완료] KSCO8 1,999개 import
-[완료] KECO2025 PDF normalizer
-[완료] KECO2025 680개 import
-[완료] 공통 validator/importer
-[완료] data_source
-[완료] etl_run
-[완료] SHA-256 source tracking
-[완료] Makefile
-[완료] migration runner
-[완료] schema_migration
-[완료] 기존 001~005 baseline
-[완료] make migrate → 0 applied
+[완료] WSL2 + Docker Engine / Compose
+[완료] Nginx / PHP 8.5 / Composer / Laravel 13
+[완료] MySQL 8.4 / Python 3.12
+[완료] timezone / UID-GID 대응
+[완료] SQL migration runner / schema_migration
+[완료] data_source / etl_run / SHA-256 provenance
+[완료] KSCO8 1,999 nodes
+[완료] KECO2025 680 nodes
+[완료] 006 fact_labor_demand
+[완료] KOSIS metadata / sample / collector
+[완료] KOSIS raw JSON 보존
+[완료] KECO2025 FK 기반 fact 적재
+[완료] GET /api/health
+[완료] GET /api/occupations/{code}/labor-demand
+[완료] Route → Controller → Service → DTO → Resource
 ```
 
-## 19. 다음 개발 단계
+---
 
-다음 migration부터 migration runner를 실제 사용한다.
 
-예정:
+
+## 21. 다음 개발 단계
 
 ```text
-006_create_fact_labor_demand.sql
+1. Laravel Feature Test
+2. 노동수요 Metric 계층
+3. 노동수요 history / 지역 / 규모 API
+4. KOSIS 임금 데이터
+5. Canonical occupation mapping
+6. 전국/지역 고용 데이터
+7. NCS
+8. Q-Net
+9. 검색/상세/비교 UI
+10. CI/CD / 정적분석 / 배포 / 모니터링
 ```
 
-이후:
+---
 
-```bash
-make migrate
-```
 
-다음 데이터 파이프라인:
 
-```text
-KOSIS
-DT_118N_DEN062
-   ↓
-API Client
-   ↓
-Raw Response
-   ↓
-Normalizer
-   ↓
-KECO2025 연결
-   ↓
-fact_labor_demand
-   ↓
-etl_run
-```
+## 22. 핵심 주의사항
 
-## 20. 핵심 주의사항
+1. Docker context는 `default`.
+2. WSL 내부 Docker Engine 사용.
+3. `.env`, `app/php/.env`는 Git 제외.
+4. 새 DB에서 `make migrate-baseline` 금지.
+5. 적용된 migration 수정 금지.
+6. DB 변경은 새 migration 추가.
+7. Laravel migration과 root migration 혼용 금지.
+8. DB schema 기준은 `/database/migrations`.
+9. 공식 raw/API 응답은 원본 보존.
+10. taxonomy 검증 실패 시 import 중단.
+11. ETL checksum/실행이력 기록.
+12. 공식 통계와 JBJ 파생 Metric 구분.
+13. 컨테이너 간 MySQL은 `mysql:3306`.
+14. Artisan/Composer 파일 생성은 `www-data` 우선.
 
-1. JBJ Docker context는 `default`.
-2. JBJ는 WSL 내부 Docker Engine 사용.
-3. `.env`는 Git에 올리지 않는다.
-4. 새 DB에서는 `make migrate-baseline`을 실행하지 않는다.
-5. 이미 적용된 migration SQL은 수정하지 않는다.
-6. DB 변경은 새 migration으로 추가한다.
-7. 공식 raw 파일은 원본 그대로 보존한다.
-8. expected count 검증 실패 시 DB import를 중단한다.
-9. ETL 실행 시 checksum과 실행이력을 기록한다.
-10. 컨테이너 간 MySQL 주소는 `mysql:3306`.

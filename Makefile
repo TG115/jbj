@@ -110,10 +110,15 @@ migrate-status:
 		status /database/migrations
 
 migrate-baseline:
+	@if [ -z "$(THROUGH)" ]; then \
+		echo "Usage: make migrate-baseline THROUGH=<version>"; \
+		echo "Example: make migrate-baseline THROUGH=5"; \
+		exit 1; \
+	fi
 	docker compose exec python \
 		python -m jbj_etl.cli.migrate \
 		baseline /database/migrations \
-		--through 5
+		--through $(THROUGH)
 
 seed-reference:
 	@set -e; \
