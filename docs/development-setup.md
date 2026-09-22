@@ -51,6 +51,8 @@ sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
 ```
 
+
+
 ## 4. Docker Compose 확인
 
 ```bash
@@ -62,6 +64,7 @@ docker compose config
 ```
 
 아래 정보 확인
+
 ```bash
 published: "8081"
 target: 80
@@ -70,15 +73,23 @@ published: "3308"
 target: 3306
 ```
 
+
+
 ## 5. 프로젝트 Clone
 
+
+
 ## 6. .env 설정
+
+
 
 ## 7. Docker Build
 
 ```bash
 docker compose build
 ```
+
+
 
 ## 8. Docker 실행
 
@@ -91,12 +102,15 @@ docker compose ps
 ```
 
 아래 정보 확인
+
 ```bash
 jbj-nginx-1    Up
 jbj-php-1      Up
 jbj-mysql-1    Up (healthy)
 jbj-python-1   Up
 ```
+
+
 
 ## 9. Migration 실행
 
@@ -105,7 +119,19 @@ docker compose exec -T mysql \
   sh -c 'mysql --default-character-set=utf8mb4 \
   -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
   < database/migrations/001_create_occupation_taxonomy.sql
+
+docker compose exec -T mysql \
+  sh -c 'mysql --default-character-set=utf8mb4 \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < database/migrations/002_create_canonical_occupation.sql
+
+docker compose exec -T mysql \
+  sh -c 'mysql --default-character-set=utf8mb4 \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < database/migrations/003_create_canonical_occupation_mapping.sql
 ```
+
+
 
 ## 10. Seed 실행
 
@@ -114,6 +140,11 @@ docker compose exec -T mysql \
   sh -c 'mysql --default-character-set=utf8mb4 \
   -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
   < database/seeds/001_seed_taxonomy_sample.sql
+
+docker compose exec -T mysql \
+  sh -c 'mysql --default-character-set=utf8mb4 \
+  -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < database/seeds/002_seed_canonical_occupation_sample.sql
 ```
 
 ```bash
@@ -135,6 +166,8 @@ FROM occupation_taxonomy_node;
 "'
 ```
 
+
+
 ### 한글이 ì... 형태로 깨지는 경우
 
 SQL import 시 utf8mb4를 명시한다.
@@ -149,11 +182,15 @@ SQL 파일도 UTF-8인지 확인한다.
 file -bi database/seeds/001_seed_taxonomy_sample.sql
 ```
 
+
+
 ## 11. 개발환경 확인
+
+
 
 ## 12. 자주 사용하는 Docker 명령어
 
+
+
 ## 문제 해결
-
-
 
