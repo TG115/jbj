@@ -4,9 +4,10 @@ Job by Job — 직업 데이터를 비교하는 서비스
 
 ## Development
 
-상세 개발환경 구축 방법:
+개발환경 구축 및 데이터 초기화 방법은 아래 문서를 참고합니다.
 
 - [Development Setup](docs/development-setup.md)
+- [Database Convention](docs/database-convention.md)
 
 ### Quick Start
 

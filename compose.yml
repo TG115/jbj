@@ -91,6 +91,7 @@ services:
     volumes:
       - ./analytics/python:/app
       - ./data:/data
+      - ./database:/database:ro
 
     environment:
       DB_HOST: mysql

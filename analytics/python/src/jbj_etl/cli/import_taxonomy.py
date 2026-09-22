@@ -14,6 +14,12 @@ from jbj_etl.taxonomy.types import TaxonomyRow
 from jbj_etl.taxonomy.validator import (
     validate_rows,
 )
+from jbj_etl.etl import (
+    complete_etl_run,
+    fail_etl_run,
+    get_data_source,
+    start_etl_run,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +57,16 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--source-url",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--source-code",
+        required=True,
+    )
+
+    parser.add_argument(
+        "--source-file",
         default=None,
     )
 
@@ -174,32 +190,73 @@ def main() -> None:
 
         connection = get_connection()
 
+        etl_run_id = None
+
         try:
-            taxonomy_id = (
-                upsert_taxonomy(
-                    connection,
-                    code=args.code,
-                    version=args.version,
-                    name=args.name,
-                    country=args.country,
-                    source_url=(
-                        args.source_url
-                    ),
-                )
+            data_source = get_data_source(
+                connection,
+                args.source_code,
             )
 
-            imported_count = (
-                import_nodes(
-                    connection,
-                    taxonomy_id,
-                    rows,
-                )
+            source_file = (
+                Path(args.source_file)
+                if args.source_file
+                else None
+            )
+
+            etl_run_id = start_etl_run(
+                connection,
+                data_source_id=int(
+                    data_source["data_source_id"]
+                ),
+                job_name="import_taxonomy",
+                source_file=source_file,
+                parameters={
+                    "taxonomy_code": args.code,
+                    "taxonomy_version": args.version,
+                },
+            )
+
+            # RUNNING 상태를 먼저 확정한다.
+            connection.commit()
+
+            taxonomy_id = upsert_taxonomy(
+                connection,
+                code=args.code,
+                version=args.version,
+                name=args.name,
+                country=args.country,
+                source_url=data_source[
+                    "source_url"
+                ],
+            )
+
+            imported_count = import_nodes(
+                connection,
+                taxonomy_id,
+                rows,
+            )
+
+            complete_etl_run(
+                connection,
+                etl_run_id=etl_run_id,
+                processed_count=imported_count,
             )
 
             connection.commit()
 
-        except Exception:
+        except Exception as exc:
             connection.rollback()
+
+            if etl_run_id is not None:
+                fail_etl_run(
+                    connection,
+                    etl_run_id=etl_run_id,
+                    error_message=str(exc),
+                )
+
+                connection.commit()
+
             raise
 
         finally:
