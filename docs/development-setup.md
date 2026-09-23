@@ -1,7 +1,8 @@
 # JBJ 개발환경 및 데이터 파이프라인 재현 가이드
 
 > 프로젝트: **JBJ (Job by Job / 직바직)**  
-> 목적: 새 PC나 다른 개발환경에서도 현재까지 구축한 Docker, DB, Migration, ETL, Laravel API, 직업분류 및 노동수요 데이터를 동일하게 재현하기 위한 문서
+> 목적: 새 PC나 다른 개발환경에서도 현재까지 구축한 Docker, DB, Migration, ETL, Laravel API, 직업분류 및 노동수요 데이터를 동일하게 재현하기 위한 문서  
+> 관련: [Product Vision](product-vision.md) · [KOSIS Labor Demand](kosis-labor-demand.md) · [Database Convention](database-convention.md) · [AGENTS.md](../AGENTS.md)
 
 ---
 
@@ -61,24 +62,31 @@ systemctl status docker
 ```text
 ~/jbj
 ├─ README.md
+├─ AGENTS.md
 ├─ Makefile
 ├─ compose.yml
 ├─ .env
 ├─ .env.example
 ├─ docs/
-│  ├─ database-convention.md
-│  └─ development-setup.md
+│  ├─ product-vision.md
+│  ├─ development-setup.md
+│  ├─ kosis-labor-demand.md
+│  └─ database-convention.md
 ├─ app/php/
 │  ├─ app/
 │  │  ├─ Data/
-│  │  │  └─ LaborDemandSnapshot.php
+│  │  │  ├─ LaborDemandSnapshot.php
+│  │  │  └─ LaborDemandMetrics.php
 │  │  ├─ Http/
 │  │  │  ├─ Controllers/Api/
 │  │  │  │  └─ OccupationLaborDemandController.php
+│  │  │  ├─ Requests/
+│  │  │  │  └─ LaborDemandQueryRequest.php
 │  │  │  └─ Resources/
 │  │  │     └─ OccupationLaborDemandResource.php
 │  │  └─ Services/
-│  │     └─ OccupationLaborDemandService.php
+│  │     ├─ OccupationLaborDemandService.php
+│  │     └─ LaborDemandMetricCalculator.php
 │  ├─ bootstrap/
 │  ├─ config/
 │  ├─ public/index.php
@@ -109,6 +117,7 @@ systemctl status docker
 │     │     ├─ ksco8.py
 │     │     └─ keco2025.py
 │     ├─ labor_demand/
+│     │  ├─ collection_plan.py
 │     │  ├─ types.py
 │     │  ├─ normalizer.py
 │     │  └─ importer.py
@@ -131,15 +140,11 @@ systemctl status docker
 │  └─ seeds/reference/
 │     └─ 001_upsert_data_source.sql
 └─ data/
-   ├─ raw/
-   │  ├─ ksco8/ksco8_items.hwpx
-   │  ├─ keco2025/keco2025_table.pdf
+   ├─ raw/          # git 제외 (현재 정책). 로컬 provenance용
+   │  ├─ ksco8/
+   │  ├─ keco2025/
    │  └─ kosis/DT_118N_DEN062/
-   │     ├─ metadata/
-   │     └─ data/
    └─ processed/taxonomies/
-      ├─ ksco8.csv
-      └─ keco2025.csv
 ```
 
 
@@ -150,16 +155,18 @@ systemctl status docker
 | 경로                             | 성격            | 역할                      |
 | ------------------------------ | ------------- | ----------------------- |
 | `app/php/app/Http/Controllers` | Laravel 기본    | HTTP 요청 처리              |
+| `app/php/app/Http/Requests`    | Laravel 기능    | FormRequest 검증           |
 | `app/php/app/Http/Resources`   | Laravel 기능/관례 | API JSON 변환             |
 | `app/php/app/Data`             | JBJ 커스텀       | DTO                     |
-| `app/php/app/Services`         | JBJ 커스텀       | 비즈니스 로직                 |
+| `app/php/app/Services`         | JBJ 커스텀       | 비즈니스 로직 / 파생지표 계산      |
 | `app/php/resources`            | Laravel 기본    | Blade/JS/CSS 등 화면 리소스   |
 | `/database/migrations`         | JBJ 커스텀       | PHP/Python 공용 DB schema |
 | `/analytics/python`            | JBJ 커스텀       | ETL/분석                  |
 | `/data`                        | JBJ 커스텀       | raw/processed 데이터       |
 
 
-Laravel 기본 migration은 사용하지 않는다. JBJ DB schema의 Single Source of Truth는 프로젝트 루트의 `/database/migrations`이다.
+Laravel 기본 migration은 사용하지 않는다. JBJ DB schema의 Single Source of Truth는 프로젝트 루트의 `/database/migrations`이다.  
+`php artisan migrate`로 JBJ 공유 스키마를 변경하지 않는다.
 
 ---
 
@@ -397,7 +404,10 @@ make inspect-kosis-demand-sample
 make collect-kosis-demand
 
 make etl-status
+make test
 ```
+
+PHP 테스트는 MySQL `jbj_test`를 사용한다. 일상적으로는 `make test`를 실행한다 (`phpunit.xml` 기본 sqlite와 혼동하지 않는다).
 
 ---
 
@@ -491,6 +501,9 @@ shortage_rate
 
 JBJ 파생지표는 공식 Fact와 구분한다.
 
+API JSON에서는 `metrics.official` / `metrics.derived`로 분리한다.
+파생 예: `unfilled_rate`, `opening_intensity`, `planned_hire_rate`.
+
 ---
 
 
@@ -542,29 +555,20 @@ Total: 680
 
 ```text
 ORG_ID = 118
-TBL_ID = DT_118N_DEN062
+TABLE_ID = DT_118N_DEN062
 직종별·규모별(2026년 이후)
 ```
 
-분류:
+우선 수집 스코프는 `collection_plan.build_priority_scopes()` 기준 **24개**다.
 
 ```text
-시도
-규모
-KECO 직종
+baseline: 전국 × 전규모           = 1
+region:   17 시도 × 전규모        = 17
+size:     전국 × 비중첩 규모 6종   = 6
 ```
 
-지표:
-
-```text
-현원
-구인인원
-채용인원
-미충원인원
-부족인원
-채용계획인원
-부족률
-```
+수집·원천 grain·**missing ≠ 0**·202601 관측값·EIS 미결정 상태는
+[KOSIS Labor Demand](kosis-labor-demand.md)를 본다.
 
 Metadata:
 
@@ -578,7 +582,7 @@ Sample:
 make inspect-kosis-demand-sample
 ```
 
-수집:
+수집 (기본 period `202601`, 24스코프 전부):
 
 ```bash
 make collect-kosis-demand
@@ -590,7 +594,7 @@ make collect-kosis-demand
 make collect-kosis-demand KOSIS_DEMAND_PERIOD=202602
 ```
 
-검증된 샘플:
+검증된 샘플 (전국 × 전규모):
 
 ```text
 2026 상반기 / 전국 / 전규모 / KECO 133 소프트웨어 개발자
@@ -604,6 +608,8 @@ make collect-kosis-demand KOSIS_DEMAND_PERIOD=202602
 부족률          3.2
 ```
 
+Raw JSON은 로컬 provenance용으로 보존하며, **일반 Git에 커밋하지 않는 것이 현재 정책**이다.
+
 ---
 
 
@@ -615,13 +621,16 @@ routes/api.php
    ↓
 OccupationLaborDemandController
    ↓
+LaborDemandQueryRequest (FormRequest)
+   ↓
 OccupationLaborDemandService
+   (+ LaborDemandMetricCalculator)
    ↓
 Query Builder
    ↓
 MySQL
    ↓
-LaborDemandSnapshot (DTO)
+LaborDemandSnapshot / LaborDemandMetrics (DTO)
    ↓
 OccupationLaborDemandResource
    ↓
@@ -631,12 +640,16 @@ JSON
 역할:
 
 ```text
-Route      = URL 연결
-Controller = HTTP 요청/응답
-Service    = JBJ 비즈니스 규칙/조회
-DTO        = 타입이 명확한 내부 데이터
-Resource   = 외부 JSON 구조
+Route       = URL 연결
+Controller  = HTTP 요청/응답
+FormRequest = region_code / size_code 검증
+Service     = JBJ 비즈니스 규칙/조회
+Calculator  = 파생 지표
+DTO         = 타입이 명확한 내부 데이터
+Resource    = 외부 JSON 구조 (`metrics.official` / `metrics.derived`)
 ```
+
+Repository 레이어는 두지 않는다.
 
 
 
@@ -645,13 +658,24 @@ Resource   = 외부 JSON 구조
 ```text
 GET /api/health
 GET /api/occupations/{occupationCode}/labor-demand
+GET /api/occupations/{occupationCode}/labor-demand/history
 ```
+
+Query (optional):
+
+| 파라미터 | 기본 |
+|---|---|
+| `region_code` | 전국 |
+| `size_code` | 전규모 |
 
 예:
 
 ```bash
 curl http://localhost:8081/api/occupations/133/labor-demand
+curl http://localhost:8081/api/occupations/133/labor-demand/history
 ```
+
+해당 grain에 행이 없으면 latest는 **404**다. 0을 합성하지 않는다 (`missing ≠ 0`).
 
 ---
 
@@ -677,10 +701,12 @@ Laravel:
 ```text
 Routing
 Controller
+FormRequest
 Dependency Injection / Service Container
 Query Builder
 JsonResource
 Artisan
+Feature / Unit Test
 ```
 
 자동 호출 예:
@@ -744,8 +770,10 @@ make collect-kosis-demand
 ```bash
 make migrate-status
 make etl-status
+make test
 curl http://localhost:8081/api/health
 curl http://localhost:8081/api/occupations/133/labor-demand
+curl http://localhost:8081/api/occupations/133/labor-demand/history
 ```
 
 ---
@@ -767,6 +795,7 @@ composer.lock
 migration
 reference seed
 docs
+AGENTS.md
 .env.example
 app/php/.env.example
 ```
@@ -782,6 +811,8 @@ data/raw/
 MySQL Docker volume
 ```
 
+`data/raw/` 제외는 **현재 정책**이다. 클론 후 taxonomy/KOSIS 재현에는 원본 파일·API 키가 필요하다.
+
 ---
 
 
@@ -793,17 +824,20 @@ MySQL Docker volume
 [완료] Nginx / PHP 8.5 / Composer / Laravel 13
 [완료] MySQL 8.4 / Python 3.12
 [완료] timezone / UID-GID 대응
-[완료] SQL migration runner / schema_migration
+[완료] SQL migration runner / schema_migration (001–006)
 [완료] data_source / etl_run / SHA-256 provenance
-[완료] KSCO8 1,999 nodes
-[완료] KECO2025 680 nodes
-[완료] 006 fact_labor_demand
+[완료] KSCO8 1,999 nodes / KECO2025 680 nodes
+[완료] 006 fact_labor_demand + KECO2025 FK 적재
 [완료] KOSIS metadata / sample / collector
-[완료] KOSIS raw JSON 보존
-[완료] KECO2025 FK 기반 fact 적재
+[완료] collection_plan 우선 24스코프 수집
+[완료] KOSIS raw JSON 로컬 보존 (Git 커밋은 정책상 제외)
 [완료] GET /api/health
 [완료] GET /api/occupations/{code}/labor-demand
-[완료] Route → Controller → Service → DTO → Resource
+[완료] GET /api/occupations/{code}/labor-demand/history
+[완료] region_code / size_code + FormRequest
+[완료] official / derived metrics
+[완료] Feature · Unit 테스트 (`make test`)
+[완료] Route → Controller → FormRequest → Service → DTO → Resource
 ```
 
 ---
@@ -813,17 +847,19 @@ MySQL Docker volume
 ## 21. 다음 개발 단계
 
 ```text
-1. Laravel Feature Test
-2. 노동수요 Metric 계층
-3. 노동수요 history / 지역 / 규모 API
-4. KOSIS 임금 데이터
-5. Canonical occupation mapping
-6. 전국/지역 고용 데이터
-7. NCS
-8. Q-Net
-9. 검색/상세/비교 UI
-10. CI/CD / 정적분석 / 배포 / 모니터링
+1. Canonical occupation mapping (실데이터)
+2. 추가 공식 데이터셋 (예: KOSIS 임금 — 라이선스 선행)
+3. 전국/지역 고용 데이터 (라이선스·출처 확인 후)
+4. NCS / Q-Net (동일)
+5. 검색 / 상세 / 비교 UI
+6. CI/CD / 정적분석 / 배포 / 모니터링
 ```
+
+이미 완료된 Feature Test · Metric · history/region/size API · 24스코프 수집은
+“다음 단계”에 두지 않는다.
+
+EIS 등 미확정 소스는 공식 답변 전 production ETL로 계획하지 않는다.
+상세: [KOSIS Labor Demand](kosis-labor-demand.md) §7.
 
 ---
 
@@ -837,12 +873,14 @@ MySQL Docker volume
 4. 새 DB에서 `make migrate-baseline` 금지.
 5. 적용된 migration 수정 금지.
 6. DB 변경은 새 migration 추가.
-7. Laravel migration과 root migration 혼용 금지.
+7. Laravel migration과 root migration 혼용 금지. **`php artisan migrate`로 JBJ 스키마 변경 금지.**
 8. DB schema 기준은 `/database/migrations`.
-9. 공식 raw/API 응답은 원본 보존.
+9. 공식 raw/API 응답은 원본 보존. Raw Git 미커밋은 현재 정책이지 구현 공백이 아님.
 10. taxonomy 검증 실패 시 import 중단.
 11. ETL checksum/실행이력 기록.
 12. 공식 통계와 JBJ 파생 Metric 구분.
-13. 컨테이너 간 MySQL은 `mysql:3306`.
-14. Artisan/Composer 파일 생성은 `www-data` 우선.
+13. **missing ≠ 0.** 원천 부재 행에 0을 만들지 않는다. 상위 집계를 하위로 조용히 대체하지 않는다.
+14. 컨테이너 간 MySQL은 `mysql:3306`.
+15. Artisan/Composer 파일 생성은 `www-data` 우선.
+16. 엔지니어링 불변 조건 요약: [AGENTS.md](../AGENTS.md).
 
