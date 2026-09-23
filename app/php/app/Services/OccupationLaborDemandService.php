@@ -9,6 +9,11 @@ use Illuminate\Support\Facades\DB;
 
 final class OccupationLaborDemandService
 {
+    public function __construct(
+        private readonly LaborDemandMetricCalculator $metricCalculator,
+    ) {
+    }
+
     private const REGION_NATIONWIDE = '15118REG2012_00';
 
     private const SIZE_ALL = '13102110322SIZES.00';
@@ -79,6 +84,41 @@ final class OccupationLaborDemandService
             return null;
         }
 
+        $currentWorkers = $row->current_workers_count !== null
+            ? (int) $row->current_workers_count
+            : null;
+
+        $openings = $row->openings_count !== null
+            ? (int) $row->openings_count
+            : null;
+
+        $hires = $row->hires_count !== null
+            ? (int) $row->hires_count
+            : null;
+
+        $unfilled = $row->unfilled_count !== null
+            ? (int) $row->unfilled_count
+            : null;
+
+        $shortage = $row->shortage_count !== null
+            ? (int) $row->shortage_count
+            : null;
+
+        $plannedHires = $row->planned_hires_count !== null
+            ? (int) $row->planned_hires_count
+            : null;
+
+        $shortageRate = $row->shortage_rate !== null
+            ? (float) $row->shortage_rate
+            : null;
+
+        $derivedMetrics = $this->metricCalculator->calculate(
+            currentWorkers: $currentWorkers,
+            openings: $openings,
+            unfilled: $unfilled,
+            plannedHires: $plannedHires,
+        );
+
         return new LaborDemandSnapshot(
             occupationCode: (string) $row->occupation_code,
             occupationName: (string) $row->occupation_name,
@@ -93,33 +133,15 @@ final class OccupationLaborDemandService
             sizeCode: (string) $row->establishment_size_member_code,
             sizeName: (string) $row->establishment_size_name,
 
-            currentWorkers: $row->current_workers_count !== null
-                ? (int) $row->current_workers_count
-                : null,
+            currentWorkers: $currentWorkers,
+            openings: $openings,
+            hires: $hires,
+            unfilled: $unfilled,
+            shortage: $shortage,
+            plannedHires: $plannedHires,
+            shortageRate: $shortageRate,
 
-            openings: $row->openings_count !== null
-                ? (int) $row->openings_count
-                : null,
-
-            hires: $row->hires_count !== null
-                ? (int) $row->hires_count
-                : null,
-
-            unfilled: $row->unfilled_count !== null
-                ? (int) $row->unfilled_count
-                : null,
-
-            shortage: $row->shortage_count !== null
-                ? (int) $row->shortage_count
-                : null,
-
-            plannedHires: $row->planned_hires_count !== null
-                ? (int) $row->planned_hires_count
-                : null,
-
-            shortageRate: $row->shortage_rate !== null
-                ? (float) $row->shortage_rate
-                : null,
+            derivedMetrics: $derivedMetrics,
         );
     }
 }

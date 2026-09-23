@@ -4,7 +4,8 @@
 				seed-reference \
         normalize-ksco8 normalize-keco2025 \
         import-ksco8 import-keco2025 \
-        etl-status
+        etl-status \
+				test-db-create test-db-migrate test
 
 up:
 	docker compose up -d
@@ -139,3 +140,31 @@ collect-kosis-demand:
 	docker compose exec python \
 		python -m jbj_etl.cli.collect_kosis_labor_demand \
 		--period $(KOSIS_DEMAND_PERIOD)
+
+
+test-db-create:
+	docker compose exec mysql \
+		sh -c 'mysql \
+		-u"root" \
+		-p"$$MYSQL_ROOT_PASSWORD" \
+		-e " \
+		CREATE DATABASE IF NOT EXISTS jbj_test \
+			CHARACTER SET utf8mb4 \
+			COLLATE utf8mb4_unicode_ci; \
+		GRANT ALL PRIVILEGES ON jbj_test.* \
+			TO '\''$$MYSQL_USER'\''@'\''%'\''; \
+		"'
+
+test-db-migrate:
+	docker compose exec \
+		-e DB_DATABASE=jbj_test \
+		python \
+		python -m jbj_etl.cli.migrate \
+		up /database/migrations
+
+test:
+	docker compose exec \
+		--user www-data \
+		-e HOME=/tmp \
+		-e DB_DATABASE=jbj_test \
+		php php artisan test

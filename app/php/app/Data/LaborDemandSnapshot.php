@@ -27,6 +27,8 @@ final readonly class LaborDemandSnapshot
         public ?int $shortage,
         public ?int $plannedHires,
         public ?float $shortageRate,
+
+        public LaborDemandMetrics $derivedMetrics,
     ) {
     }
 }

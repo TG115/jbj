@@ -36,13 +36,21 @@ final class OccupationLaborDemandResource extends JsonResource
             ],
 
             'metrics' => [
-                'current_workers' => $this->resource->currentWorkers,
-                'openings' => $this->resource->openings,
-                'hires' => $this->resource->hires,
-                'unfilled' => $this->resource->unfilled,
-                'shortage' => $this->resource->shortage,
-                'planned_hires' => $this->resource->plannedHires,
-                'shortage_rate' => $this->resource->shortageRate,
+                'official' => [
+                    'current_workers' => $this->resource->currentWorkers,
+                    'openings' => $this->resource->openings,
+                    'hires' => $this->resource->hires,
+                    'unfilled' => $this->resource->unfilled,
+                    'shortage' => $this->resource->shortage,
+                    'planned_hires' => $this->resource->plannedHires,
+                    'shortage_rate' => $this->resource->shortageRate,
+                ],
+
+                'derived' => [
+                    'unfilled_rate' => $this->resource->derivedMetrics->unfilledRate,
+                    'opening_intensity' => $this->resource->derivedMetrics->openingIntensity,
+                    'planned_hire_rate' =>$this->resource->derivedMetrics->plannedHireRate,
+                ],
             ],
         ];
     }
