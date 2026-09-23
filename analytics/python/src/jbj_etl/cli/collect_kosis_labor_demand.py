@@ -14,6 +14,11 @@ from jbj_etl.etl import (
     start_etl_run,
 )
 
+from jbj_etl.labor_demand.collection_plan import (
+    LaborDemandScope,
+    build_priority_scopes,
+)
+
 from jbj_etl.labor_demand.importer import (
     import_labor_demand,
 )
@@ -29,14 +34,6 @@ from jbj_etl.providers.kosis.client import (
 
 ORG_ID = "118"
 TABLE_ID = "DT_118N_DEN062"
-
-REGION_NATIONWIDE = (
-    "15118REG2012_00"
-)
-
-SIZE_ALL = (
-    "13102110322SIZES.00"
-)
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,46 +76,27 @@ def save_raw_json(
             indent=2,
         )
 
-
-def main() -> None:
-    args = parse_args()
-
-    period = args.period
-
-    if (
-        len(period) != 6
-        or not period.isdigit()
-        or period[-2:] not in {
-            "01",
-            "02",
-        }
-    ):
-        raise ValueError(
-            "period는 YYYY01 또는 YYYY02 "
-            "형식이어야 합니다."
-        )
-
-    raw_file = Path(
-        "/data/raw/kosis/"
-        f"{TABLE_ID}/data/"
-        f"{period}_nationwide_all_size.json"
+def collect_scope(
+    connection,
+    client: KosisClient,
+    data_source_id: int,
+    period: str,
+    scope: LaborDemandScope,
+) -> None:
+    raw_file = (
+        Path("/data/raw/kosis")
+        / TABLE_ID
+        / "data"
+        / period
+        / f"{scope.slug}.json"
     )
-
-    connection = get_connection()
 
     etl_run_id = None
 
     try:
-        source = get_data_source(
-            connection,
-            "KOSIS_LABOR_DEMAND",
-        )
-
         etl_run_id = start_etl_run(
             connection,
-            data_source_id=int(
-                source["data_source_id"]
-            ),
+            data_source_id=data_source_id,
             job_name=(
                 "collect_kosis_labor_demand"
             ),
@@ -126,8 +104,21 @@ def main() -> None:
                 "org_id": ORG_ID,
                 "table_id": TABLE_ID,
                 "period": period,
-                "region": REGION_NATIONWIDE,
-                "size": SIZE_ALL,
+
+                "scope_kind": scope.kind,
+
+                "region_code":
+                    scope.region.code,
+
+                "region_name":
+                    scope.region.name,
+
+                "size_code":
+                    scope.size.code,
+
+                "size_name":
+                    scope.size.name,
+
                 "occupation": "ALL",
                 "items": "ALL",
             },
@@ -135,28 +126,20 @@ def main() -> None:
 
         connection.commit()
 
-        client = KosisClient()
+        payload = client.get_parameter_data(
+            org_id=ORG_ID,
+            table_id=TABLE_ID,
 
-        payload = (
-            client.get_parameter_data(
-                org_id=ORG_ID,
-                table_id=TABLE_ID,
+            obj_l1=scope.region.code,
+            obj_l2=scope.size.code,
 
-                obj_l1=(
-                    REGION_NATIONWIDE
-                ),
+            obj_l3="ALL",
+            item_id="ALL",
 
-                obj_l2=SIZE_ALL,
+            period_type="S",
 
-                obj_l3="ALL",
-
-                item_id="ALL",
-
-                period_type="S",
-
-                start_period=period,
-                end_period=period,
-            )
+            start_period=period,
+            end_period=period,
         )
 
         if not isinstance(
@@ -184,9 +167,7 @@ def main() -> None:
 
         result = import_labor_demand(
             connection,
-            data_source_id=int(
-                source["data_source_id"]
-            ),
+            data_source_id=data_source_id,
             etl_run_id=etl_run_id,
             rows=rows,
         )
@@ -210,27 +191,20 @@ def main() -> None:
 
         connection.commit()
 
-        print()
         print(
-            "KOSIS labor demand import complete"
-        )
-        print(
-            f"Period: {period}"
-        )
-        print(
-            f"Processed: "
+            f"  Processed: "
             f"{result.processed_count}"
         )
         print(
-            f"Inserted: "
+            f"  Inserted: "
             f"{result.inserted_count}"
         )
         print(
-            f"Updated: "
+            f"  Updated: "
             f"{result.updated_count}"
         )
         print(
-            f"Raw: {raw_file}"
+            f"  Raw: {raw_file}"
         )
 
     except Exception as exc:
@@ -246,6 +220,80 @@ def main() -> None:
             connection.commit()
 
         raise
+
+
+def main() -> None:
+    args = parse_args()
+
+    period = args.period
+
+    if (
+        len(period) != 6
+        or not period.isdigit()
+        or period[-2:] not in {
+            "01",
+            "02",
+        }
+    ):
+        raise ValueError(
+            "period는 YYYY01 또는 YYYY02 "
+            "형식이어야 합니다."
+        )
+
+    connection = get_connection()
+
+    try:
+        source = get_data_source(
+            connection,
+            "KOSIS_LABOR_DEMAND",
+        )
+
+        data_source_id = int(
+            source["data_source_id"]
+        )
+
+        client = KosisClient()
+
+        scopes = build_priority_scopes()
+
+        print()
+        print(
+            "KOSIS labor demand collection start"
+        )
+        print(
+            f"Period: {period}"
+        )
+        print(
+            f"Scopes: {len(scopes)}"
+        )
+        print()
+
+        for index, scope in enumerate(
+            scopes,
+            start=1,
+        ):
+            print(
+                f"[{index}/{len(scopes)}] "
+                f"{scope.region.name} / "
+                f"{scope.size.name}"
+            )
+
+            collect_scope(
+                connection=connection,
+                client=client,
+                data_source_id=data_source_id,
+                period=period,
+                scope=scope,
+            )
+
+            print(
+                "  Status: SUCCESS"
+            )
+            print()
+
+        print(
+            "KOSIS labor demand collection complete"
+        )
 
     finally:
         connection.close()
