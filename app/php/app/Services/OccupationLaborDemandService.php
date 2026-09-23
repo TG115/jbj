@@ -14,13 +14,18 @@ final class OccupationLaborDemandService
     ) {
     }
 
-    private const REGION_NATIONWIDE = '15118REG2012_00';
+    private const NATIONWIDE_REGION_CODE = '15118REG2012_00';
 
-    private const SIZE_ALL = '13102110322SIZES.00';
+    private const ALL_SIZE_CODE = '13102110322SIZES.00';
 
     public function findLatest(
         string $occupationCode,
+        ?string $regionCode = null,
+        ?string $sizeCode = null,
     ): ?LaborDemandSnapshot {
+        $regionCode = $regionCode ?? self::NATIONWIDE_REGION_CODE;
+        $sizeCode = $sizeCode ?? self::ALL_SIZE_CODE;
+            
         $row = DB::table('fact_labor_demand as f')
             ->join(
                 'occupation_taxonomy_node as n',
@@ -49,11 +54,11 @@ final class OccupationLaborDemandService
             )
             ->where(
                 'f.region_member_code',
-                self::REGION_NATIONWIDE,
+                $regionCode,
             )
             ->where(
                 'f.establishment_size_member_code',
-                self::SIZE_ALL,
+                $sizeCode,
             )
             ->orderByDesc('f.period_code')
             ->select([
@@ -92,7 +97,12 @@ final class OccupationLaborDemandService
      */
     public function findHistory(
         string $occupationCode,
+        ?string $regionCode = null,
+        ?string $sizeCode = null,
     ): array {
+        $regionCode = $regionCode ?? self::NATIONWIDE_REGION_CODE;
+        $sizeCode = $sizeCode ?? self::ALL_SIZE_CODE;
+
         $rows = DB::table('fact_labor_demand as f')
             ->join(
                 'occupation_taxonomy_node as n',
@@ -121,11 +131,11 @@ final class OccupationLaborDemandService
             )
             ->where(
                 'f.region_member_code',
-                self::REGION_NATIONWIDE,
+                $regionCode,
             )
             ->where(
                 'f.establishment_size_member_code',
-                self::SIZE_ALL,
+                $sizeCode,
             )
             ->orderBy('f.period_code')
             ->select([

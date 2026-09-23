@@ -9,6 +9,7 @@ use App\Http\Resources\OccupationLaborDemandResource;
 use App\Services\OccupationLaborDemandService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use App\Http\Requests\LaborDemandQueryRequest;
 
 final class OccupationLaborDemandController extends Controller
 {
@@ -18,10 +19,15 @@ final class OccupationLaborDemandController extends Controller
     }
 
     public function show(
+        LaborDemandQueryRequest $request,
         string $occupationCode,
     ): OccupationLaborDemandResource|JsonResponse {
+        $validated = $request->validated();
+
         $snapshot = $this->service->findLatest(
-            $occupationCode,
+            occupationCode: $occupationCode,
+            regionCode: $validated['region_code'] ?? null,
+            sizeCode: $validated['size_code'] ?? null,
         );
 
         if ($snapshot === null) {
@@ -39,10 +45,15 @@ final class OccupationLaborDemandController extends Controller
     }
 
     public function history(
+        LaborDemandQueryRequest $request,
         string $occupationCode,
     ): AnonymousResourceCollection {
+        $validated = $request->validated();
+
         $snapshots = $this->service->findHistory(
-            $occupationCode,
+            occupationCode: $occupationCode,
+            regionCode: $validated['region_code'] ?? null,
+            sizeCode: $validated['size_code'] ?? null,
         );
 
         return OccupationLaborDemandResource::collection(

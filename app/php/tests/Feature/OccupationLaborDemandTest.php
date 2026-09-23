@@ -158,6 +158,69 @@ final class OccupationLaborDemandTest extends TestCase
             );
     }
 
+    public function test_it_filters_labor_demand_by_region_and_size(): void
+    {
+        $context = $this->createOccupationContext();
+
+        $this->insertLaborDemand(
+            context: $context,
+            periodCode: '202601',
+            currentWorkers: 341646,
+            openings: 16408,
+        );
+
+        $this->insertLaborDemand(
+            context: $context,
+            periodCode: '202601',
+            currentWorkers: 50000,
+            openings: 5000,
+            regionCode: 'TEST_REGION_01',
+            regionName: '테스트 지역',
+            sizeCode: 'TEST_SIZE_01',
+            sizeName: '테스트 규모',
+        );
+
+        $response = $this->getJson(
+            '/api/occupations/133/labor-demand'
+            . '?region_code=TEST_REGION_01'
+            . '&size_code=TEST_SIZE_01'
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonPath(
+                'data.scope.region.code',
+                'TEST_REGION_01',
+            )
+            ->assertJsonPath(
+                'data.scope.region.name',
+                '테스트 지역',
+            )
+            ->assertJsonPath(
+                'data.scope.establishment_size.code',
+                'TEST_SIZE_01',
+            )
+            ->assertJsonPath(
+                'data.metrics.official.current_workers',
+                50000,
+            );
+    }
+
+    public function test_it_rejects_invalid_labor_demand_query(): void
+    {
+        $response = $this->getJson(
+            '/api/occupations/133/labor-demand'
+            . '?region_code='
+            . str_repeat('A', 51)
+        );
+
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'region_code',
+            ]);
+    }
+
     /**
      * 테스트에 필요한 공통 기준 데이터를 만든다.
      *
@@ -230,6 +293,10 @@ final class OccupationLaborDemandTest extends TestCase
         string $periodCode,
         int $currentWorkers,
         int $openings,
+        string $regionCode = '15118REG2012_00',
+        string $regionName = '전국',
+        string $sizeCode = '13102110322SIZES.00',
+        string $sizeName = '전규모(1인이상)',
     ): void {
         $year = (int) substr(
             $periodCode,
@@ -259,26 +326,16 @@ final class OccupationLaborDemandTest extends TestCase
             'reference_year' => $year,
             'reference_half' => $half,
 
-            'region_member_code' =>
-                '15118REG2012_00',
+            'region_member_code' => $regionCode,
+            'region_name' => $regionName,
 
-            'region_name' => '전국',
+            'establishment_size_member_code' => $sizeCode,
+            'establishment_size_name' => $sizeName,
 
-            'establishment_size_member_code' =>
-                '13102110322SIZES.00',
+            'source_occupation_member_code' => 'keco2026_133',
+            'source_occupation_name' => '133 소프트웨어 개발자',
 
-            'establishment_size_name' =>
-                '전규모(1인이상)',
-
-            'source_occupation_member_code' =>
-                'keco2026_133',
-
-            'source_occupation_name' =>
-                '133 소프트웨어 개발자',
-
-            'current_workers_count' =>
-                $currentWorkers,
-
+            'current_workers_count' => $currentWorkers,
             'openings_count' => $openings,
 
             'hires_count' => 13414,
