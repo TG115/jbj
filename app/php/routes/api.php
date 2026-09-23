@@ -40,3 +40,14 @@ Route::get(
     'occupationCode',
     '\d{1,3}',
 );
+
+Route::get(
+    '/occupations/{occupationCode}/labor-demand/history',
+    [
+        OccupationLaborDemandController::class,
+        'history',
+    ],
+)->where(
+    'occupationCode',
+    '\d{1,3}',
+);

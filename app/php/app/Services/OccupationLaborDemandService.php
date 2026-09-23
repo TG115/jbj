@@ -80,68 +80,184 @@ final class OccupationLaborDemandService
             ])
             ->first();
 
-        if ($row === null) {
-            return null;
+            if ($row === null) {
+                return null;
+            }
+            
+            return $this->toSnapshot($row);
+    }
+
+    /**
+     * @return list<LaborDemandSnapshot>
+     */
+    public function findHistory(
+        string $occupationCode,
+    ): array {
+        $rows = DB::table('fact_labor_demand as f')
+            ->join(
+                'occupation_taxonomy_node as n',
+                'n.occupation_taxonomy_node_id',
+                '=',
+                'f.occupation_taxonomy_node_id',
+            )
+            ->join(
+                'occupation_taxonomy as t',
+                't.occupation_taxonomy_id',
+                '=',
+                'n.occupation_taxonomy_id',
+            )
+            ->join(
+                'data_source as ds',
+                'ds.data_source_id',
+                '=',
+                'f.data_source_id',
+            )
+            ->where('t.code', 'KECO')
+            ->where('t.version', '2025')
+            ->where('n.code', $occupationCode)
+            ->where(
+                'ds.source_code',
+                'KOSIS_LABOR_DEMAND',
+            )
+            ->where(
+                'f.region_member_code',
+                self::REGION_NATIONWIDE,
+            )
+            ->where(
+                'f.establishment_size_member_code',
+                self::SIZE_ALL,
+            )
+            ->orderBy('f.period_code')
+            ->select([
+                'n.code as occupation_code',
+                'n.name_ko as occupation_name',
+
+                'f.period_code',
+                'f.reference_year',
+                'f.reference_half',
+
+                'f.region_member_code',
+                'f.region_name',
+
+                'f.establishment_size_member_code',
+                'f.establishment_size_name',
+
+                'f.current_workers_count',
+                'f.openings_count',
+                'f.hires_count',
+                'f.unfilled_count',
+                'f.shortage_count',
+                'f.planned_hires_count',
+                'f.shortage_rate',
+            ])
+            ->get();
+
+        $history = [];
+
+        foreach ($rows as $row) {
+            $history[] = $this->toSnapshot($row);
         }
 
-        $currentWorkers = $row->current_workers_count !== null
-            ? (int) $row->current_workers_count
-            : null;
+        return $history;
+    }
 
-        $openings = $row->openings_count !== null
-            ? (int) $row->openings_count
-            : null;
+    private function toSnapshot(
+        object $row,
+    ): LaborDemandSnapshot {
+        $currentWorkers =
+            $row->current_workers_count !== null
+                ? (int) $row->current_workers_count
+                : null;
 
-        $hires = $row->hires_count !== null
-            ? (int) $row->hires_count
-            : null;
+        $openings =
+            $row->openings_count !== null
+                ? (int) $row->openings_count
+                : null;
 
-        $unfilled = $row->unfilled_count !== null
-            ? (int) $row->unfilled_count
-            : null;
+        $hires =
+            $row->hires_count !== null
+                ? (int) $row->hires_count
+                : null;
 
-        $shortage = $row->shortage_count !== null
-            ? (int) $row->shortage_count
-            : null;
+        $unfilled =
+            $row->unfilled_count !== null
+                ? (int) $row->unfilled_count
+                : null;
 
-        $plannedHires = $row->planned_hires_count !== null
-            ? (int) $row->planned_hires_count
-            : null;
+        $shortage =
+            $row->shortage_count !== null
+                ? (int) $row->shortage_count
+                : null;
 
-        $shortageRate = $row->shortage_rate !== null
-            ? (float) $row->shortage_rate
-            : null;
+        $plannedHires =
+            $row->planned_hires_count !== null
+                ? (int) $row->planned_hires_count
+                : null;
 
-        $derivedMetrics = $this->metricCalculator->calculate(
-            currentWorkers: $currentWorkers,
-            openings: $openings,
-            unfilled: $unfilled,
-            plannedHires: $plannedHires,
-        );
+        $shortageRate =
+            $row->shortage_rate !== null
+                ? (float) $row->shortage_rate
+                : null;
+
+        $derivedMetrics =
+            $this->metricCalculator->calculate(
+                currentWorkers: $currentWorkers,
+                openings: $openings,
+                unfilled: $unfilled,
+                plannedHires: $plannedHires,
+            );
 
         return new LaborDemandSnapshot(
-            occupationCode: (string) $row->occupation_code,
-            occupationName: (string) $row->occupation_name,
+            occupationCode:
+                $row->occupation_code,
 
-            periodCode: (string) $row->period_code,
-            referenceYear: (int) $row->reference_year,
-            referenceHalf: (int) $row->reference_half,
+            occupationName:
+                $row->occupation_name,
 
-            regionCode: (string) $row->region_member_code,
-            regionName: (string) $row->region_name,
+            periodCode:
+                $row->period_code,
 
-            sizeCode: (string) $row->establishment_size_member_code,
-            sizeName: (string) $row->establishment_size_name,
+            referenceYear:
+                (int) $row->reference_year,
 
-            currentWorkers: $currentWorkers,
-            openings: $openings,
-            hires: $hires,
-            unfilled: $unfilled,
-            shortage: $shortage,
-            plannedHires: $plannedHires,
-            shortageRate: $shortageRate,
+            referenceHalf:
+                (int) $row->reference_half,
 
-            derivedMetrics: $derivedMetrics,
+            regionCode:
+                (string) $row->region_member_code,
+            
+            regionName:
+                (string) $row->region_name,
+            
+            sizeCode:
+                (string) $row->establishment_size_member_code,
+            
+            sizeName:
+                (string) $row->establishment_size_name,
+
+            currentWorkers:
+                $currentWorkers,
+
+            openings:
+                $openings,
+
+            hires:
+                $hires,
+
+            unfilled:
+                $unfilled,
+
+            shortage:
+                $shortage,
+
+            plannedHires:
+                $plannedHires,
+
+            shortageRate:
+                $shortageRate,
+
+            derivedMetrics:
+                $derivedMetrics,
         );
     }
 }

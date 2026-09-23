@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\OccupationLaborDemandResource;
 use App\Services\OccupationLaborDemandService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class OccupationLaborDemandController extends Controller
 {
@@ -34,6 +35,18 @@ final class OccupationLaborDemandController extends Controller
 
         return new OccupationLaborDemandResource(
             $snapshot,
+        );
+    }
+
+    public function history(
+        string $occupationCode,
+    ): AnonymousResourceCollection {
+        $snapshots = $this->service->findHistory(
+            $occupationCode,
+        );
+
+        return OccupationLaborDemandResource::collection(
+            $snapshots,
         );
     }
 }

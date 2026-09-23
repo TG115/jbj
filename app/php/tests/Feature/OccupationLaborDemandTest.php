@@ -119,6 +119,45 @@ final class OccupationLaborDemandTest extends TestCase
             );
     }
 
+    public function test_it_returns_labor_demand_history(): void
+    {
+        $context = $this->createOccupationContext();
+
+        $this->insertLaborDemand(
+            context: $context,
+            periodCode: '202501',
+            currentWorkers: 300000,
+            openings: 12000,
+        );
+
+        $this->insertLaborDemand(
+            context: $context,
+            periodCode: '202601',
+            currentWorkers: 341646,
+            openings: 16408,
+        );
+
+        $response = $this->getJson(
+            '/api/occupations/133/labor-demand/history'
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath(
+                'data.0.period.code',
+                '202501',
+            )
+            ->assertJsonPath(
+                'data.1.period.code',
+                '202601',
+            )
+            ->assertJsonPath(
+                'data.1.metrics.official.current_workers',
+                341646,
+            );
+    }
+
     /**
      * 테스트에 필요한 공통 기준 데이터를 만든다.
      *
