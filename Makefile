@@ -5,7 +5,7 @@
         normalize-ksco8 normalize-keco2025 \
         import-ksco8 import-keco2025 \
         etl-status \
-				test-db-create test-db-migrate test
+				test-db-create test-db-migrate test test-python
 
 up:
 	docker compose up -d
@@ -168,3 +168,7 @@ test:
 		-e HOME=/tmp \
 		-e DB_DATABASE=jbj_test \
 		php php artisan test
+
+test-python:
+	docker compose exec python \
+		python -m unittest discover -s tests -v
