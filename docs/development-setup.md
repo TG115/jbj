@@ -103,6 +103,8 @@ systemctl status docker
 ├─ analytics/python/
 │  ├─ Dockerfile
 │  ├─ requirements.txt
+│  ├─ tests/
+│  │  └─ unit/
 │  └─ src/jbj_etl/
 │     ├─ config.py
 │     ├─ db.py
@@ -408,6 +410,12 @@ make test
 ```
 
 PHP 테스트는 MySQL `jbj_test`를 사용한다. 일상적으로는 `make test`를 실행한다 (`phpunit.xml` 기본 sqlite와 혼동하지 않는다).
+
+Python ETL 단위 테스트(스코프 플랜 등):
+
+```bash
+make test-python
+```
 
 ---
 

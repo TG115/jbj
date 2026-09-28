@@ -51,7 +51,8 @@ planned_hire_rate
 ## 2. 우선 수집 스코프 (24)
 
 구현: `analytics/python/src/jbj_etl/labor_demand/collection_plan.py`  
-`build_priority_scopes()` → collector가 전부 순회한다.
+`build_priority_scopes()` → collector가 전부 순회한다.  
+구조 회귀: `make test-python` (`tests/unit/test_collection_plan.py`).
 
 | kind | 구성 | 개수 |
 |---|---|---:|
