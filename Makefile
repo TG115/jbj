@@ -1,7 +1,7 @@
 .PHONY: up down ps build \
         migrate seed \
 				migrate migrate-status migrate-baseline \
-				seed-reference \
+				seed-reference seed-canonical-sample verify-canonical-sample \
         normalize-ksco8 normalize-keco2025 \
         import-ksco8 import-keco2025 \
         etl-status \
@@ -133,6 +133,33 @@ seed-reference:
 			"$$MYSQL_DATABASE"' \
 			< "$$file"; \
 	done
+
+seed-canonical-sample:
+	docker compose exec -T mysql \
+		sh -c 'mysql --default-character-set=utf8mb4 \
+		-u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE"' \
+		< database/seeds/002_seed_canonical_occupation_sample.sql
+
+verify-canonical-sample:
+	docker compose exec mysql \
+		sh -c 'mysql --default-character-set=utf8mb4 \
+		-u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE" \
+		-e "\
+		SELECT \
+			c.slug, \
+			m.usage_code, \
+			t.code AS taxonomy_code, \
+			t.version AS taxonomy_version, \
+			n.code AS occupation_code \
+		FROM canonical_occupation c \
+		JOIN canonical_occupation_mapping m \
+		  ON m.canonical_occupation_id = c.canonical_occupation_id \
+		JOIN occupation_taxonomy_node n \
+		  ON n.occupation_taxonomy_node_id = m.occupation_taxonomy_node_id \
+		JOIN occupation_taxonomy t \
+		  ON t.occupation_taxonomy_id = n.occupation_taxonomy_id \
+		WHERE c.slug = '\''software-developer'\'' \
+		ORDER BY m.usage_code;"'
 
 KOSIS_DEMAND_PERIOD ?= 202601
 

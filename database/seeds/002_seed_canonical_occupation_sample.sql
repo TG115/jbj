@@ -12,7 +12,13 @@ INSERT INTO canonical_occupation (
     'Software Developer',
     '소프트웨어를 설계, 개발, 테스트하고 유지보수하는 직업',
     FALSE
-);
+)
+ON DUPLICATE KEY UPDATE
+    canonical_occupation_id = LAST_INSERT_ID(canonical_occupation_id),
+    name_ko = VALUES(name_ko),
+    name_en = VALUES(name_en),
+    description = VALUES(description),
+    is_public = VALUES(is_public);
 
 SET @software_developer_id = LAST_INSERT_ID();
 
@@ -41,7 +47,12 @@ JOIN occupation_taxonomy t
     ON t.occupation_taxonomy_id = n.occupation_taxonomy_id
 WHERE t.code = 'KSCO'
   AND t.version = '8'
-  AND n.code = '222';
+  AND n.code = '222'
+ON DUPLICATE KEY UPDATE
+    mapping_type = VALUES(mapping_type),
+    mapping_source = VALUES(mapping_source),
+    is_primary = VALUES(is_primary),
+    note = VALUES(note);
 
 
 -- KECO2025 133
@@ -68,4 +79,9 @@ JOIN occupation_taxonomy t
     ON t.occupation_taxonomy_id = n.occupation_taxonomy_id
 WHERE t.code = 'KECO'
   AND t.version = '2025'
-  AND n.code = '133';
+  AND n.code = '133'
+ON DUPLICATE KEY UPDATE
+    mapping_type = VALUES(mapping_type),
+    mapping_source = VALUES(mapping_source),
+    is_primary = VALUES(is_primary),
+    note = VALUES(note);
