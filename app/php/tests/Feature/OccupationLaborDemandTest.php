@@ -105,7 +105,7 @@ final class OccupationLaborDemandTest extends TestCase
             );
     }
 
-    public function test_it_returns_404_when_labor_demand_does_not_exist(): void
+    public function test_it_returns_404_not_found_when_occupation_unknown(): void
     {
         $response = $this->getJson(
             '/api/occupations/999/labor-demand'
@@ -113,6 +113,59 @@ final class OccupationLaborDemandTest extends TestCase
 
         $response
             ->assertNotFound()
+            ->assertJsonPath(
+                'message',
+                '노동수요 데이터를 찾을 수 없습니다.',
+            )
+            ->assertJsonPath(
+                'code',
+                'not_found',
+            );
+    }
+
+    public function test_it_returns_404_source_unavailable_when_region_grain_missing(): void
+    {
+        $context = $this->createOccupationContext();
+
+        // 전국 × 전규모 L3만 존재 (시도 grain 없음 — KOSIS 지역 L3 공백)
+        $this->insertLaborDemand(
+            context: $context,
+            periodCode: '202601',
+            currentWorkers: 341646,
+            openings: 16408,
+        );
+
+        $response = $this->getJson(
+            '/api/occupations/133/labor-demand'
+            . '?region_code=15118REG2012_11'
+        );
+
+        $response
+            ->assertNotFound()
+            ->assertJsonPath(
+                'code',
+                'source_unavailable',
+            )
+            ->assertJsonPath(
+                'message',
+                '요청한 지역·규모 조합의 노동수요 원천 데이터가 없습니다.',
+            );
+    }
+
+    public function test_it_returns_404_not_found_when_occupation_has_no_facts(): void
+    {
+        $this->createOccupationContext();
+
+        $response = $this->getJson(
+            '/api/occupations/133/labor-demand'
+        );
+
+        $response
+            ->assertNotFound()
+            ->assertJsonPath(
+                'code',
+                'not_found',
+            )
             ->assertJsonPath(
                 'message',
                 '노동수요 데이터를 찾을 수 없습니다.',

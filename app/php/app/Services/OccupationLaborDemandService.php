@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Data\LaborDemandAbsence;
 use App\Data\LaborDemandSnapshot;
 use Illuminate\Support\Facades\DB;
 
@@ -25,7 +26,7 @@ final class OccupationLaborDemandService
     ): ?LaborDemandSnapshot {
         $regionCode = $regionCode ?? self::NATIONWIDE_REGION_CODE;
         $sizeCode = $sizeCode ?? self::ALL_SIZE_CODE;
-            
+
         $row = DB::table('fact_labor_demand as f')
             ->join(
                 'occupation_taxonomy_node as n',
@@ -85,11 +86,113 @@ final class OccupationLaborDemandService
             ])
             ->first();
 
-            if ($row === null) {
-                return null;
-            }
-            
-            return $this->toSnapshot($row);
+        if ($row === null) {
+            return null;
+        }
+
+        return $this->toSnapshot($row);
+    }
+
+    /**
+     * Exact grain 행이 없을 때 missing≠0 이유를 구분한다.
+     *
+     * - not_found: 직종 미존재, 또는 비교 가능한 다른 grain fact도 없음
+     * - source_unavailable: 동일 직종의 다른 grain(예: 전국×동일 규모) fact는 있으나
+     *   요청한 region×size 조합에는 원천/적재 행이 없음
+     */
+    public function resolveAbsence(
+        string $occupationCode,
+        ?string $regionCode = null,
+        ?string $sizeCode = null,
+    ): LaborDemandAbsence {
+        $regionCode = $regionCode ?? self::NATIONWIDE_REGION_CODE;
+        $sizeCode = $sizeCode ?? self::ALL_SIZE_CODE;
+
+        if (! $this->occupationExists($occupationCode)) {
+            return new LaborDemandAbsence(
+                code: LaborDemandAbsence::CODE_NOT_FOUND,
+                message: '노동수요 데이터를 찾을 수 없습니다.',
+            );
+        }
+
+        if ($this->hasOtherGrainFact(
+            occupationCode: $occupationCode,
+            regionCode: $regionCode,
+            sizeCode: $sizeCode,
+        )) {
+            return new LaborDemandAbsence(
+                code: LaborDemandAbsence::CODE_SOURCE_UNAVAILABLE,
+                message: '요청한 지역·규모 조합의 노동수요 원천 데이터가 없습니다.',
+            );
+        }
+
+        return new LaborDemandAbsence(
+            code: LaborDemandAbsence::CODE_NOT_FOUND,
+            message: '노동수요 데이터를 찾을 수 없습니다.',
+        );
+    }
+
+    private function occupationExists(
+        string $occupationCode,
+    ): bool {
+        return DB::table('occupation_taxonomy_node as n')
+            ->join(
+                'occupation_taxonomy as t',
+                't.occupation_taxonomy_id',
+                '=',
+                'n.occupation_taxonomy_id',
+            )
+            ->where('t.code', 'KECO')
+            ->where('t.version', '2025')
+            ->where('n.code', $occupationCode)
+            ->exists();
+    }
+
+    /**
+     * 요청 grain이 아닌 다른 region(동일 size)에 해당 직종 fact가 있는지.
+     * 전형적 예: 전국 L3는 있고 시도 L3는 없는 KOSIS 지역 grain 공백.
+     */
+    private function hasOtherGrainFact(
+        string $occupationCode,
+        string $regionCode,
+        string $sizeCode,
+    ): bool {
+        return DB::table('fact_labor_demand as f')
+            ->join(
+                'occupation_taxonomy_node as n',
+                'n.occupation_taxonomy_node_id',
+                '=',
+                'f.occupation_taxonomy_node_id',
+            )
+            ->join(
+                'occupation_taxonomy as t',
+                't.occupation_taxonomy_id',
+                '=',
+                'n.occupation_taxonomy_id',
+            )
+            ->join(
+                'data_source as s',
+                's.data_source_id',
+                '=',
+                'f.data_source_id',
+            )
+            ->where('t.code', 'KECO')
+            ->where('t.version', '2025')
+            ->where('n.code', $occupationCode)
+            ->where(
+                's.source_code',
+                'KOSIS_LABOR_DEMAND',
+            )
+            ->where(
+                'f.establishment_size_member_code',
+                $sizeCode,
+            )
+            ->where(
+                'f.region_member_code',
+                '!=',
+                $regionCode,
+            )
+            ->exists();
     }
 
     /**

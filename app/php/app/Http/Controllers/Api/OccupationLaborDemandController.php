@@ -31,9 +31,16 @@ final class OccupationLaborDemandController extends Controller
         );
 
         if ($snapshot === null) {
+            $absence = $this->service->resolveAbsence(
+                occupationCode: $occupationCode,
+                regionCode: $validated['region_code'] ?? null,
+                sizeCode: $validated['size_code'] ?? null,
+            );
+
             return response()->json(
                 [
-                    'message' => '노동수요 데이터를 찾을 수 없습니다.',
+                    'message' => $absence->message,
+                    'code' => $absence->code,
                 ],
                 404,
             );

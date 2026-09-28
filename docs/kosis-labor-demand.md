@@ -104,7 +104,8 @@ KOSIS가 **스코프마다 다른 KECO 계층**을 내려준다.
 1. **missing ≠ zero**  
    원천에 없는 occupation×region×size 조합을 0으로 채우지 않는다.
 2. **가짜 0 금지**  
-   API/UI/ETL에서 부재 행을 합성하지 않는다. (현재 latest API는 행 없으면 404.)
+   API/UI/ETL에서 부재 행을 합성하지 않는다. (현재 latest API는 행 없으면 404.)  
+   404 JSON은 기존 `message`에 더해 안정적인 `code`를 둔다: `not_found`(직종 미존재·비교 가능한 fact 없음) / `source_unavailable`(동일 직종의 다른 grain—예: 전국×동일 규모—은 있으나 요청 region×size 행은 없음). HTTP는 둘 다 404.
 3. **상위→하위 조용한 대체 금지**  
    L2 집계를 L3 직종 값처럼 자동 대입하지 않는다.
 4. **집계 수준 공개**  
