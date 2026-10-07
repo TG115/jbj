@@ -68,10 +68,10 @@ systemctl status docker
 ├─ .env
 ├─ .env.example
 ├─ docs/
-│  ├─ product-vision.md
+│  ├─ database-convention.md
 │  ├─ development-setup.md
-│  ├─ kosis-labor-demand.md
-│  └─ database-convention.md
+│  ├─ eis-employment-statistics.md
+│  └─ kosis-labor-demand.md
 ├─ app/php/
 │  ├─ app/
 │  │  ├─ Data/
@@ -847,19 +847,18 @@ MySQL Docker volume
 ## 21. 다음 개발 단계
 
 ```text
-1. Canonical occupation mapping (실데이터)
-2. 추가 공식 데이터셋 (예: KOSIS 임금 — 라이선스 선행)
-3. 전국/지역 고용 데이터 (라이선스·출처 확인 후)
-4. NCS / Q-Net (동일)
-5. 검색 / 상세 / 비교 UI
-6. CI/CD / 정적분석 / 배포 / 모니터링
+1. KOSIS 노동수요 마무리 — 완료(scope test + missing≠0)
+2. Canonical occupation mapping — 진행 중(샘플 완료, 명명·매핑 정책·API 미완료)
+3. EIS 기술 스파이크
+4. 스파이크 성공 후 EIS schema / ETL
+5. 임금
+6. 기타 고용 데이터
+7. NCS
+8. Q-Net
+9. 검색/상세/비교 UI
 ```
 
-이미 완료된 Feature Test · Metric · history/region/size API · 24스코프 수집은
-“다음 단계”에 두지 않는다.
-
-EIS 등 미확정 소스는 공식 답변 전 production ETL로 계획하지 않는다.
-상세: [KOSIS Labor Demand](kosis-labor-demand.md) §7.
+EIS의 출처·이용 조건·일 100회 API 제약·기술 스파이크 기준은 [EIS 고용행정통계 활용 정책과 기술 조사](eis-employment-statistics.md)를 따른다.
 
 ---
 

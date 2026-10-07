@@ -114,13 +114,12 @@ curl http://localhost:8081/api/occupations/133/labor-demand/history
 
 ## Documentation
 
-| 문서 | 역할 |
-|---|---|
-| [Product Vision](docs/product-vision.md) | 제품 배경·의도된 흐름 |
-| [Development Setup](docs/development-setup.md) | 환경 재현·파이프라인 |
-| [KOSIS Labor Demand](docs/kosis-labor-demand.md) | 수집 스코프·grain·해석 규칙 |
-| [Database Convention](docs/database-convention.md) | DB 명명·스키마 관례 |
-| [AGENTS.md](AGENTS.md) | 에이전트/기여자 엔지니어링 불변 조건 |
+상세 개발환경 구축 및 데이터 초기화:
+
+- [Development Setup](docs/development-setup.md)
+- [Database Convention](docs/database-convention.md)
+- [KOSIS Labor Demand](docs/kosis-labor-demand.md)
+- [EIS Employment Statistics](docs/eis-employment-statistics.md)
 
 ## Quick Start
 
@@ -289,10 +288,14 @@ Artisan/Composer가 bind mount에 파일을 생성할 때는 가능한 한 `www-
 ## Next
 
 ```text
-Canonical occupation mapping (실데이터)
-→ 추가 공식 데이터셋 (예: KOSIS 임금, 라이선스 선행)
-→ 검색 / 상세 / 비교 UI
-→ CI/CD / 배포
+KOSIS Labor Demand Finish (completed: scope test + missing≠0)
+→ Canonical Occupation Mapping (active: naming/mapping policy/API)
+→ EIS Technical Spike
+→ EIS Schema / ETL (only after successful spike)
+→ Wage
+→ Other Employment Data
+→ NCS / Q-Net
+→ Search / Detail / Compare UI
 ```
 
-EIS 등 미확정 소스는 공식 답변 전 production ETL로 계획하지 않는다. 자세한 해석 규칙은 [KOSIS Labor Demand](docs/kosis-labor-demand.md)를 본다.
+EIS 기술 조사·개발은 가능하지만, EIS 콘텐츠를 활용한 상용 프로덕션 출시는 고용노동부 사전 협의 완료 전까지 준비 완료 상태가 아니다. 상세 정책과 수집 제약은 [EIS Employment Statistics](docs/eis-employment-statistics.md)를 따른다.
